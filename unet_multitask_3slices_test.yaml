@@ -1,0 +1,78 @@
+General:
+    project: AcouslicAI2024
+    seed: 1234
+    accelerator: gpu    # cpu, gpu
+    precision: 16    # 16, 32, bf16
+    strategy: ddp    # ddp, ddp2, dp, none
+    num_nodes: 1
+#    gpus: 1
+#    gpus: [0, 1, 2, 3]
+    epoch: &epoch 50
+#    epoch_half: &epoch_half 25
+    check_val_every_n_epoch: 5
+    debug: False
+    lr_tune: False
+    mode: predict
+
+Data:
+    dataset:
+        num_slices: &num_slices 3
+        num_classes: &num_classes 2
+        num_images_per_scan: 140
+        num_scans: 6
+    test:
+        batch_size: 1
+        sub_batch_size: 16
+
+Model:
+    arch: unet_multitask
+    params:
+        encoder_name: convnextv2_base
+        in_channels: *num_slices
+        classes: *num_classes
+        encoder_weights: None
+        encoder_depth: 4
+        decoder_channels: [256, 128, 64, 32]
+        decoder_use_batchnorm: True
+        aux_pooling: avg
+        aux_dropout: None
+    pretrained: unet_multitask_3slices-LR2e-05-base_W1_2_005_FL-epoch=49-valid_loss=0.74.ckpt
+
+Transform:
+    org_width: &org_width 744 
+    org_height: &org_height 562
+    resize_width: &resize_width 768   # with padding
+    resize_height: &resize_height 576   # with padding
+    resize_ratio: 1.0    
+    test:
+        - name: LoadImaged
+          params:
+            keys: ["image"]
+        - name: EnsureChannelFirstd
+          params:
+            keys: ["image"]
+        - name: Transposed
+          params:
+            keys: ["image"]
+            indices: [0, 3, 2, 1]   # B, z, y, x
+        - name: ResizeWithPadOrCropd
+          params:
+            keys: ["image"]
+            spatial_size: [-1, *resize_height, *resize_width]
+            method: "symmetric"
+            mode: "constant"
+            value: 0
+        - name: NormalizeIntensityd
+          params:
+            keys: ["image"]
+            subtrahend: [123.675]   #, 116.28, 103.53]
+            divisor: [58.395]       #, 57.12, 57.375]
+            channel_wise: True
+        - name: ToTensord
+          params:
+            keys: ["image"]
+    test_post:
+        - name: ResizeWithPadOrCrop
+          params:
+            spatial_size: [*org_height, *org_width]
+            method: "symmetric"
