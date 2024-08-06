@@ -1,0 +1,9 @@
+addict
+evalutils
+monai
+monai[itk]
+numpy
+opencv-python-headless
+SimpleITK
+torch
+torchseg
