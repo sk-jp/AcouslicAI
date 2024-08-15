@@ -44,15 +44,10 @@ def run():
     print("Setting up ...")
     
     # Read a config file
-#    cfg = read_yaml('flexunet_b4_test_mha.yaml')
-#    cfg = read_yaml('unet_test_mha.yaml')
     cfg = read_yaml('unet_multitask_3slices_test.yaml')
     
-    # Define a mode
-    if cfg.Model.arch == 'flexible_unet_multitask':
-        from flexible_unet_multitask import FlexibleUNetMultitask
-        model = FlexibleUNetMultitask(**cfg.Model.params)  
-    elif cfg.Model.arch == 'unet_multitask':
+    # Define a model
+    if cfg.Model.arch == 'unet_multitask':
         from unet_multitask import UnetMultitask
         model = UnetMultitask(**cfg.Model.params)  
        
@@ -86,12 +81,10 @@ def run():
         stacked_fetal_ultrasound_path)
     
     if cfg.Model.arch == 'unet_multitask':
-#        print("pre:", fetal_abdomen_segmentation.shape)
         # post transform
         post_transform = get_transform(cfg.Transform.test_post)
         fetal_abdomen_segmentation = post_transform(np.expand_dims(fetal_abdomen_segmentation, 0))
         fetal_abdomen_segmentation = fetal_abdomen_segmentation[0].numpy()
-#        print("post:", fetal_abdomen_segmentation.shape)
 
     # Save your output
     write_array_as_image_file(
