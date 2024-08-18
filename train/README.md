@@ -7,4 +7,4 @@ To train a model.
      Data.dataset.train_datalist
      Data.dataset.valid_datalist
 5. Run main.py
-   $ python main.py --config unet_multitask_3slices.yaml --gpus <gpu ids>
+   $ python main.py --config unet_multitask_3slices.yaml --gpus "gpu ids"
