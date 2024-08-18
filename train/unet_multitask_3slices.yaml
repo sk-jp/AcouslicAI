@@ -1,0 +1,182 @@
+General:
+    project: AcouslicAI2024
+    seed: 1234
+    accelerator: gpu    # cpu, gpu
+    precision: 16    # 16, 32, bf16
+    strategy: ddp    # ddp, ddp2, dp, none
+    num_nodes: 1
+    gpus: 0
+    epoch: &epoch 50
+    check_val_every_n_epoch: 1
+    debug: False
+    lr_tune: False
+    mode: train
+
+Data:
+    dataset:
+        top_dir: /data/MICCAI2024_ACOUSLIC_AI
+        train_datalist: datalist/train_datalist_seg_class_3slices.csv
+        valid_datalist: datalist/valid_datalist_seg_class_3slices.csv
+        num_slices: &num_slices 3
+        num_classes: &num_classes 2
+        num_images_per_scan: 140
+        num_scans: 6
+    dataloader:
+        batch_size: 8
+        val_batch_size: 32
+        num_workers: 4
+        train:
+            shuffle: True
+        valid:
+            shuffle: False
+        test:
+            shuffle: False
+
+Model:
+    arch: unet_multitask
+    params:
+        encoder_name: convnextv2_base
+        in_channels: *num_slices
+        classes: *num_classes
+        encoder_weights: True
+        encoder_depth: 4
+        decoder_channels: [256, 128, 64, 32]
+        decoder_use_batchnorm: True
+        aux_pooling: avg
+        aux_dropout: None
+    pretrained: None
+
+Optimizer:
+    optimizer:
+        name: AdamW
+        params:
+            lr: !!python/float 2e-5
+            weight_decay: !!python/float 1e-5
+    lr_scheduler:
+        name: CosineAnnealingLR
+        params:
+            T_max: *epoch
+    accumulate_grad_batches: 1
+    encoder_lr_ratio: 1.0
+
+Loss:
+    lossfuns: [ConditionalDiceLoss, FocalLoss, HausdorffDTLoss]
+    lossfun_weights: [1.0, 2.0, 0.05]
+    ConditionalDiceLoss:
+        name: conditional_dice_loss
+        params:
+            include_background: False
+            to_onehot_y: True
+            softmax: True
+    FocalLoss:
+        name: focal_loss
+        params:
+            include_background: True
+            to_onehot_y: True
+            use_softmax: True
+    HausdorffDTLoss:
+        name: hausdorff
+        params:
+            include_background: False
+            to_onehot_y: True
+            softmax: True
+
+Transform:
+    resize_width: &resize_width 768   # with padding
+    resize_height: &resize_height 576   # with padding
+    train:
+        - name: LoadImaged
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+        - name: EnsureChannelFirstd
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+        - name: Transposed
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+            indices: [0, 2, 1]
+        - name: ChangeLabeld
+          params:
+            keys: ["mask"]
+        - name: ResizeWithPadOrCropd
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+            spatial_size: [*resize_height, *resize_width]
+            method: "symmetric"
+            mode: "constant"
+            value: 0
+        - name: NormalizeIntensityd
+          params:
+            keys: ["image0", "image1", "image2"]
+            subtrahend: [123.675]   #, 116.28, 103.53]
+            divisor: [58.395]       #, 57.12, 57.375]
+            channel_wise: True
+        - name: RandRotated
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+            range_x: 0.1
+            range_y: 0.1            
+            range_z: 0.1
+            mode: ["bilinear", "bilinear", "bilinear", "nearest"]
+            prob: 0.5
+        - name: RandZoomd
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+            min_zoom: 0.9
+            min_zoom: 1.1
+            mode: ["bilinear", "bilinear", "bilinear", "nearest"]
+            prob: 0.5
+        - name: RandShiftIntensityd
+          params:
+            keys: ["image0", "image1", "image2"]
+            offsets: 0.05
+            prob: 0.25
+        - name: RandGaussianNoised
+          params:
+            keys: ["image0", "image1", "image2"]
+            mean: 0
+            std: 0.1
+            prob: 0.25
+        - name: ConcatItemsd
+          params:
+            keys: ["image0", "image1", "image2"]
+            name: image
+            dim: 0
+        - name: ToTensord
+          params:
+            keys: ["image", "mask"]
+    valid:
+        - name: LoadImaged
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+        - name: EnsureChannelFirstd
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+        - name: Transposed
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+            indices: [0, 2, 1]
+        - name: ChangeLabeld
+          params:
+            keys: ["mask"]
+        - name: ResizeWithPadOrCropd
+          params:
+            keys: ["image0", "image1", "image2", "mask"]
+            spatial_size: [*resize_height, *resize_width]
+            method: "symmetric"
+            mode: "constant"
+            value: 0
+        - name: NormalizeIntensityd
+          params:
+            keys: ["image0", "image1", "image2"]
+            subtrahend: [123.675]   #, 116.28, 103.53]
+            divisor: [58.395]       #, 57.12, 57.375]
+            channel_wise: True
+        - name: ConcatItemsd
+          params:
+            keys: ["image0", "image1", "image2"]
+            name: image
+            dim: 0
+        - name: ToTensord
+          params:
+            keys: ["image", "mask"]

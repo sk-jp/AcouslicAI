@@ -1,0 +1,8 @@
+addict
+opencv-python
+monai
+torch
+torchmetrics
+torchseg
+lightning
+pandas
